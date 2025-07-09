@@ -1,0 +1,15 @@
+{
+  "name": "railway-blackout-test",
+  "type": "module",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.0"
+  }
+}
