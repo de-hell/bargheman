@@ -1,11 +1,20 @@
+
+import fetch from "node-fetch";
+import dotenv from "dotenv";
+dotenv.config();
+
+// const API_URL = "https://uiapi2.saapa.ir/api/ebills/PlannedBlackoutsReport";
+// const BILL_ID = process.env.BILL_ID;
+// const AUTH_TOKEN = process.env.AUTH_TOKEN;
+// const TARGET_ADDRESS = process.env.TARGET_ADDRESS;
+
 const TARGET_ADDRESS = "160";
 const API_URL = "https://uiapi2.saapa.ir/api/ebills/PlannedBlackoutsReport";
 const BILL_ID = "7241520414129";
 const AUTH_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IntcIlVzZXJJcFwiOm51bGwsXCJVc2VySWRcIjoxNzI0OTM4NCxcIlNlc3Npb25LZXlcIjpudWxsfSIsImV4cCI6MTc2NzA3OTgwMCwiaWF0IjoxNzUxMjY4NjAwLCJuYmYiOjE3NTEyNjg2MDB9.fxZLpwZmqC3zLmtfREtBMFCsFK75L6u10bdeaQcbN0c";
 
-// fetch data from bargheman
-export const handler = async (event) => {
+async function fetchBlackouts() {
   const requestBody = {
     bill_id: BILL_ID,
     from_date: "",
@@ -25,28 +34,22 @@ export const handler = async (event) => {
     });
 
     if (!response.ok) {
+      console.error(`❌ Failed: ${response.status} ${response.statusText}`);
       const errorText = await response.text();
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: "API Error", details: errorText }),
-      };
+      console.log(errorText);
+      return [];
     }
 
     const result = await response.json();
+    console.log("msg: ", result.message);
 
     if (!Array.isArray(result.data)) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "Invalid API Response", result }),
-      };
+      console.error("Unexpected response format:", result);
+      return [];
     }
 
-    // Filter and map to simplified structure
-    const filteredData = result.data
-      .filter((entry) => {
-        const matchAddress = entry.outage_address.includes(TARGET_ADDRESS);
-        return matchAddress;
-      })
+    const filtered = result.data
+      .filter((entry) => entry.outage_address.includes(TARGET_ADDRESS))
       .map((entry) => ({
         date: entry.outage_date,
         startTime: entry.outage_start_time,
@@ -54,17 +57,14 @@ export const handler = async (event) => {
         desc: entry.reason_outage.slice(0, 10),
       }));
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify(filteredData),
-    };
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: "Unexpected Error",
-        details: error.message,
-      }),
-    };
+    console.log(`✅ Found ${filtered.length} matching blackout(s):`);
+    console.log(JSON.stringify(filtered, null, 2));
+
+    return filtered;
+  } catch (err) {
+    console.error("❌ Error:", err);
+    return [];
   }
-};
+}
+
+fetchBlackouts();

@@ -1,12 +1,13 @@
 {
-  "name": "nodejs-app",
+  "name": "railway-blackout-test",
+  "type": "module",
   "version": "1.0.0",
-  "description": "A minimal Node.js web application.",
-  "main": "app.js",
-  "dependencies": {
-    "express": "^4.19.2"
-  },
+  "main": "index.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "dotenv": "^16.3.1"
   }
 }
