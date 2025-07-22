@@ -1,19 +1,25 @@
-
-import fetch from "node-fetch";
+// import fetch from "node-fetch";
 import dotenv from "dotenv";
 dotenv.config();
 
-// const API_URL = "https://uiapi2.saapa.ir/api/ebills/PlannedBlackoutsReport";
-// const BILL_ID = process.env.BILL_ID;
-// const AUTH_TOKEN = process.env.AUTH_TOKEN;
-// const TARGET_ADDRESS = process.env.TARGET_ADDRESS;
+// Validate required env vars
+function validateEnvVars(...vars) {
+  const missing = vars.filter((v) => !process.env[v]);
+  if (missing.length > 0) {
+    console.error(`❌ Missing environment variable(s): ${missing.join(", ")}`);
+    process.exit(1); // Stop execution
+  }
+}
+validateEnvVars("BILL_ID", "AUTH_TOKEN", "TARGET_ADDRESS");
 
-const TARGET_ADDRESS = "160";
-const API_URL = "https://uiapi2.saapa.ir/api/ebills/PlannedBlackoutsReport";
-const BILL_ID = "7241520414129";
-const AUTH_TOKEN =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IntcIlVzZXJJcFwiOm51bGwsXCJVc2VySWRcIjoxNzI0OTM4NCxcIlNlc3Npb25LZXlcIjpudWxsfSIsImV4cCI6MTc2NzA3OTgwMCwiaWF0IjoxNzUxMjY4NjAwLCJuYmYiOjE3NTEyNjg2MDB9.fxZLpwZmqC3zLmtfREtBMFCsFK75L6u10bdeaQcbN0c";
+// Constants
+const BARGHEMAN_API = "https://uiapi2.saapa.ir/api/ebills/PlannedBlackoutsReport";
+const NETLIFY_API = "https://khamooshi.netlify.app/.netlify/functions/setBlackouts";
+const BILL_ID = process.env.BILL_ID;
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const TARGET_ADDRESS = process.env.TARGET_ADDRESS;
 
+// Fetch blackouts from bargheman
 async function fetchBlackouts() {
   const requestBody = {
     bill_id: BILL_ID,
@@ -22,7 +28,7 @@ async function fetchBlackouts() {
   };
 
   try {
-    const response = await fetch(API_URL, {
+    const response = await fetch(BARGHEMAN_API, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${AUTH_TOKEN}`,
@@ -35,13 +41,12 @@ async function fetchBlackouts() {
 
     if (!response.ok) {
       console.error(`❌ Failed: ${response.status} ${response.statusText}`);
-      const errorText = await response.text();
-      console.log(errorText);
+      console.log(await response.text());
       return [];
     }
 
     const result = await response.json();
-    console.log("msg: ", result.message);
+    console.log("msg:", result.message);
 
     if (!Array.isArray(result.data)) {
       console.error("Unexpected response format:", result);
@@ -49,22 +54,71 @@ async function fetchBlackouts() {
     }
 
     const filtered = result.data
-      .filter((entry) => entry.outage_address.includes(TARGET_ADDRESS))
-      .map((entry) => ({
-        date: entry.outage_date,
-        startTime: entry.outage_start_time,
-        endTime: entry.outage_stop_time,
-        desc: entry.reason_outage.slice(0, 10),
-      }));
+      .filter(({ outage_address }) => outage_address.includes(TARGET_ADDRESS))
+      .map((entry) => {
+        const {
+          outage_date,
+          outage_start_time,
+          outage_stop_time,
+          reason_outage,
+        } = entry;
+
+        return {
+          date: outage_date,
+          startTime: outage_start_time,
+          endTime: outage_stop_time,
+          desc: reason_outage?.slice(0, 10) ?? "N/A",
+        };
+      });
+
+    // const filtered = result.data
+    // .filter((e) => e.outage_address.includes(TARGET_ADDRESS))
+    // .map((e) => ({
+    //   date: e.outage_date,
+    //   startTime: e.outage_start_time,
+    //   endTime: e.outage_stop_time,
+    //   desc: e.reason_outage?.slice(0, 10),
+    // }));
 
     console.log(`✅ Found ${filtered.length} matching blackout(s):`);
     console.log(JSON.stringify(filtered, null, 2));
 
     return filtered;
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("❌ Error fetching blackouts:", err);
     return [];
   }
 }
 
-fetchBlackouts();
+// Send data to Netlify
+async function sendToNetlify(outages) {
+  try {
+    const requestBody = {
+      outages,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const response = await fetch(NETLIFY_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const result = await response.json();
+    console.log("✅ Response from Netlify:", result);
+  } catch (err) {
+    console.error("❌ Error sending to Netlify:", err);
+  }
+}
+
+// Main
+async function main() {
+  const outages = await fetchBlackouts();
+  await sendToNetlify(outages);
+}
+
+// Top-level error handling for unhandled rejections
+main().catch((err) => {
+  console.error("❌ Uncaught error:", err);
+  process.exit(1); // Exit with error code
+});
